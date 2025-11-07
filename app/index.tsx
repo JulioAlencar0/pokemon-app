@@ -31,7 +31,7 @@ const getPokemonData = async (name: string) => {
     return {
       name: data.name,
       image: data.sprites.other["official-artwork"].front_default,
-      types: data.types.map((t) => t.type.name),
+      types: data.types.map((t: { type: { name: string } }) => t.type.name),
       description: flavorTextEntry ? flavorTextEntry.flavor_text : "No description available.",
     };
   } catch (error) {
@@ -40,10 +40,17 @@ const getPokemonData = async (name: string) => {
   }
 };
 
+type PokemonData = {
+  name: string;
+  image: string;
+  types: string[];
+  description: string;
+};
+
 export default function Index() {
   const [openSearch, setOpenSearch] = useState(false);
   const [searchText, setSearchText] = useState("");
-  const [pokemon, setPokemon] = useState(null);
+  const [pokemon, setPokemon] = useState<PokemonData | null>(null);
   const animation = useRef(new Animated.Value(0)).current;
 
   // 🔍 Função que controla o input e faz busca
