@@ -64,6 +64,7 @@ type PokemonData = {
   description: string;
 };
 
+// Função que busca pokémons da API principal
 const fetchPokemons = async (limit = 30, offset = 0) => {
   const res = await fetch(`https://pokeapi.co/api/v2/pokemon?limit=${limit}&offset=${offset}`);
   const data = await res.json();
@@ -94,18 +95,21 @@ const fetchPokemons = async (limit = 30, offset = 0) => {
 };
 
 export default function Index() {
-  const [openSearch, setOpenSearch] = useState(false);
-  const [searchText, setSearchText] = useState("");
-  const [pokemons, setPokemons] = useState<PokemonData[]>([]);
-  const [offset, setOffset] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
-  const animation = useRef(new Animated.Value(0)).current;
+  // Estados principais
+  const [openSearch, setOpenSearch] = useState(false); // controla se o input tá aberto
+  const [searchText, setSearchText] = useState(""); // texto digitado no input
+  const [pokemons, setPokemons] = useState<PokemonData[]>([]); // lista de pokémons que será mostrada
+  const [offset, setOffset] = useState(0); // controle de paginação
+  const [loading, setLoading] = useState(false); // evita chamadas duplicadas
+  const [hasMore, setHasMore] = useState(true); // controla se tem mais pokémons pra carregar
+  const animation = useRef(new Animated.Value(0)).current; // animação da barra de pesquisa
 
+  // Carrega os pokémons quando o app inicia
   useEffect(() => {
     loadPokemons(true);
   }, []);
 
+  // Função pra carregar os pokémons da API (30 por vez)
   const loadPokemons = async (reset = false) => {
     if (loading) return;
     setLoading(true);
@@ -117,6 +121,7 @@ export default function Index() {
     setLoading(false);
   };
 
+  // Pesquisa por nome OU tipo
   const handleSearch = async () => {
     if (searchText.trim() === "") {
       setOffset(0);
@@ -127,11 +132,12 @@ export default function Index() {
     const normalized = searchText.toLowerCase();
     const type = typeTranslations[normalized] || normalized;
 
+    // Primeiro tenta buscar por tipo
     try {
       const response = await fetch(`https://pokeapi.co/api/v2/type/${type}`);
       const data = await response.json();
       const results = await Promise.all(
-        data.pokemon.slice(0, 30).map(async (p: any) => {
+        data.pokemon.map(async (p: any) => {
           const res = await fetch(p.pokemon.url);
           const pokeData = await res.json();
 
@@ -154,6 +160,7 @@ export default function Index() {
       setPokemons(results);
       setHasMore(false);
     } catch {
+      // Se não for tipo, tenta buscar por nome
       try {
         const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${normalized}`);
         const data = await res.json();
@@ -169,7 +176,7 @@ export default function Index() {
           name: data.name,
           image: data.sprites.other["official-artwork"].front_default,
           types: data.types.map((t: any) => t.type.name),
-          description: desc ? desc.flavor_text.replace(/\n|\f/g, " ") : "",
+          description: desc ? desc.flavor_text.replace(/\n|\f/g, " ") : "No description available.",
         };
         setPokemons([result]);
       } catch {
@@ -178,6 +185,7 @@ export default function Index() {
     }
   };
 
+  // Abre/fecha o input de busca e faz reset se necessário
   const toggleSearch = async () => {
     if (openSearch && searchText.trim() !== "") {
       await handleSearch();
@@ -198,6 +206,7 @@ export default function Index() {
     }
   };
 
+  // Animações do input
   const inputTranslate = animation.interpolate({
     inputRange: [0, 1],
     outputRange: [200, 0],
@@ -208,6 +217,7 @@ export default function Index() {
     outputRange: [0, 1],
   });
 
+  // Renderiza cada card de Pokémon
   const renderItem = ({ item }: { item: PokemonData }) => (
     <View
       style={[
@@ -230,6 +240,9 @@ export default function Index() {
     </View>
   );
 
+  // -------------------------------------
+  //               RETURN
+  // -------------------------------------
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -263,17 +276,20 @@ export default function Index() {
         <Text style={styles.title}>Pokédex</Text>
       </View>
 
+      {/* LISTA DE POKÉMONS */}
       <FlatList
-        data={pokemons}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.id.toString()}
-        numColumns={2}
-        columnWrapperStyle={styles.row}
-        onEndReached={() => hasMore && !loading && loadPokemons()}
-        onEndReachedThreshold={0.4}
+        data={pokemons} // lista que será renderizada
+        renderItem={renderItem} // função que desenha cada item
+        keyExtractor={(item) => item.id.toString()} // chave única
+        numColumns={2} // duas colunas (grid 2x2)
+        columnWrapperStyle={styles.row} // estilo das linhas
+        onEndReached={() => hasMore && !loading && loadPokemons()} // scroll infinito
+        onEndReachedThreshold={0.4} // quando chegar a 40% do fim
         contentContainerStyle={{ padding: 16 }}
         ListFooterComponent={
-          loading ? <Text style={{ textAlign: "center", margin: 20 }}>Procurando Pokemons...</Text> : null
+          loading ? (
+            <Text style={{ textAlign: "center", margin: 20 }}>Procurando Pokémons...</Text>
+          ) : null
         }
       />
     </SafeAreaView>
@@ -354,9 +370,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   image: {
-    width: 80,
-    height: 80,
-    marginRight: 10,
+    width: 100,
+    height: 100,
   },
   description: {
     fontSize: 9,
