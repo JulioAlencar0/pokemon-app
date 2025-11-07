@@ -1,72 +1,197 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Image } from "expo-image";
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
+  FlatList,
+  Keyboard,
   StatusBar,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
-  Keyboard
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-// 🔥 Função pra buscar dados da PokéAPI
-const getPokemonData = async (name: string) => {
-  try {
-    const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${name.toLowerCase()}`);
-    const data = await response.json();
+const typeColors: Record<string, string> = {
+  normal: "#A8A77A",
+  fire: "#EE8130",
+  water: "#6390F0",
+  electric: "#F7D02C",
+  grass: "#7AC74C",
+  ice: "#96D9D6",
+  fighting: "#C22E28",
+  poison: "#A33EA1",
+  ground: "#E2BF65",
+  flying: "#A98FF3",
+  psychic: "#F95587",
+  bug: "#A6B91A",
+  rock: "#B6A136",
+  ghost: "#735797",
+  dragon: "#6F35FC",
+  dark: "#705746",
+  steel: "#B7B7CE",
+  fairy: "#D685AD",
+};
 
-    // Busca descrição
-    const speciesResponse = await fetch(data.species.url);
-    const speciesData = await speciesResponse.json();
-
-    // Pega texto em inglês (a API não tem em PT)
-    const flavorTextEntry = speciesData.flavor_text_entries.find(
-      (entry: { language: { name: string }; flavor_text: string }) => entry.language.name === "en"
-    );
-
-    return {
-      name: data.name,
-      image: data.sprites.other["official-artwork"].front_default,
-      types: data.types.map((t: { type: { name: string } }) => t.type.name),
-      description: flavorTextEntry ? flavorTextEntry.flavor_text : "No description available.",
-    };
-  } catch (error) {
-    console.error("Erro ao buscar Pokémon:", error);
-    return null;
-  }
+const typeTranslations: Record<string, string> = {
+  fogo: "fire",
+  água: "water",
+  grama: "grass",
+  elétrico: "electric",
+  lutador: "fighting",
+  venenoso: "poison",
+  terra: "ground",
+  voador: "flying",
+  psíquico: "psychic",
+  inseto: "bug",
+  pedra: "rock",
+  fantasma: "ghost",
+  dragão: "dragon",
+  sombrio: "dark",
+  aço: "steel",
+  fada: "fairy",
+  gelo: "ice",
+  normal: "normal",
 };
 
 type PokemonData = {
+  id: number;
   name: string;
   image: string;
   types: string[];
   description: string;
 };
 
+const fetchPokemons = async (limit = 30, offset = 0) => {
+  const res = await fetch(`https://pokeapi.co/api/v2/pokemon?limit=${limit}&offset=${offset}`);
+  const data = await res.json();
+
+  const results = await Promise.all(
+    data.results.map(async (p: any) => {
+      const info = await fetch(p.url);
+      const dataInfo = await info.json();
+
+      const species = await fetch(dataInfo.species.url);
+      const speciesData = await species.json();
+
+      const desc = speciesData.flavor_text_entries.find(
+        (entry: any) => entry.language.name === "en"
+      );
+
+      return {
+        id: dataInfo.id,
+        name: dataInfo.name,
+        image: dataInfo.sprites.other["official-artwork"].front_default,
+        types: dataInfo.types.map((t: any) => t.type.name),
+        description: desc ? desc.flavor_text.replace(/\n|\f/g, " ") : "No description available.",
+      };
+    })
+  );
+
+  return results;
+};
+
 export default function Index() {
   const [openSearch, setOpenSearch] = useState(false);
   const [searchText, setSearchText] = useState("");
-  const [pokemon, setPokemon] = useState<PokemonData | null>(null);
+  const [pokemons, setPokemons] = useState<PokemonData[]>([]);
+  const [offset, setOffset] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const animation = useRef(new Animated.Value(0)).current;
 
-  // 🔍 Função que controla o input e faz busca
+  useEffect(() => {
+    loadPokemons(true);
+  }, []);
+
+  const loadPokemons = async (reset = false) => {
+    if (loading) return;
+    setLoading(true);
+    const limit = 30;
+    const results = await fetchPokemons(limit, reset ? 0 : offset);
+    setPokemons((prev) => (reset ? results : [...prev, ...results]));
+    setOffset((prev) => (reset ? limit : prev + limit));
+    setHasMore(results.length === limit);
+    setLoading(false);
+  };
+
+  const handleSearch = async () => {
+    if (searchText.trim() === "") {
+      setOffset(0);
+      await loadPokemons(true);
+      return;
+    }
+
+    const normalized = searchText.toLowerCase();
+    const type = typeTranslations[normalized] || normalized;
+
+    try {
+      const response = await fetch(`https://pokeapi.co/api/v2/type/${type}`);
+      const data = await response.json();
+      const results = await Promise.all(
+        data.pokemon.slice(0, 30).map(async (p: any) => {
+          const res = await fetch(p.pokemon.url);
+          const pokeData = await res.json();
+
+          const species = await fetch(pokeData.species.url);
+          const speciesData = await species.json();
+
+          const desc = speciesData.flavor_text_entries.find(
+            (entry: any) => entry.language.name === "en"
+          );
+
+          return {
+            id: pokeData.id,
+            name: pokeData.name,
+            image: pokeData.sprites.other["official-artwork"].front_default,
+            types: pokeData.types.map((t: any) => t.type.name),
+            description: desc ? desc.flavor_text.replace(/\n|\f/g, " ") : "No description available.",
+          };
+        })
+      );
+      setPokemons(results);
+      setHasMore(false);
+    } catch {
+      try {
+        const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${normalized}`);
+        const data = await res.json();
+        const species = await fetch(data.species.url);
+        const speciesData = await species.json();
+
+        const desc = speciesData.flavor_text_entries.find(
+          (entry: any) => entry.language.name === "en"
+        );
+
+        const result = {
+          id: data.id,
+          name: data.name,
+          image: data.sprites.other["official-artwork"].front_default,
+          types: data.types.map((t: any) => t.type.name),
+          description: desc ? desc.flavor_text.replace(/\n|\f/g, " ") : "",
+        };
+        setPokemons([result]);
+      } catch {
+        setPokemons([]);
+      }
+    }
+  };
+
   const toggleSearch = async () => {
     if (openSearch && searchText.trim() !== "") {
-      const result = await getPokemonData(searchText);
-      if (result) {
-        setPokemon(result);
-        Keyboard.dismiss();
-      }
+      await handleSearch();
+      Keyboard.dismiss();
     } else {
       Animated.timing(animation, {
         toValue: openSearch ? 0 : 1,
         duration: 400,
         useNativeDriver: false,
       }).start();
+
+      if (openSearch && searchText.trim() === "") {
+        await loadPokemons(true);
+      }
 
       if (openSearch) Keyboard.dismiss();
       setOpenSearch(!openSearch);
@@ -83,13 +208,35 @@ export default function Index() {
     outputRange: [0, 1],
   });
 
+  const renderItem = ({ item }: { item: PokemonData }) => (
+    <View
+      style={[
+        styles.card,
+        { backgroundColor: typeColors[item.types[0]] || "#ccc" },
+      ]}
+    >
+      <Text style={styles.name}>{item.name.toUpperCase()}</Text>
+      <View style={styles.cardBody}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.description}>{item.description}</Text>
+          {item.types.map((t) => (
+            <Text key={t} style={styles.type}>
+              {t}
+            </Text>
+          ))}
+        </View>
+        <Image source={{ uri: item.image }} style={styles.image} />
+      </View>
+    </View>
+  );
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <StatusBar backgroundColor="#E4ECE9" barStyle="dark-content" />
+        <StatusBar backgroundColor="transparent" barStyle="dark-content" />
 
         <TouchableOpacity style={styles.searchButton} onPress={toggleSearch}>
-          <Ionicons name="search-circle-sharp" size={45} color="#000000ff" />
+          <Ionicons name="search-circle-sharp" size={45} color="#000" />
         </TouchableOpacity>
 
         <Image source={require("../assets/ball.png")} style={styles.logo} />
@@ -109,36 +256,26 @@ export default function Index() {
             style={styles.input}
             value={searchText}
             onChangeText={setSearchText}
-            onSubmitEditing={toggleSearch}
+            onSubmitEditing={handleSearch}
           />
         </Animated.View>
 
         <Text style={styles.title}>Pokédex</Text>
       </View>
 
-      <View style={styles.content}>
-        {pokemon && (
-          <View style={styles.card}>
-            <Text style={styles.name}>{pokemon.name.toUpperCase()}</Text>
-
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <Image source={{ uri: pokemon.image }} style={styles.image} />
-
-              <View style={{ flex: 1 }}>
-                <Text style={styles.description}>{pokemon.description}</Text>
-
-                <View>
-                  {pokemon.types.map((type) => (
-                    <Text key={type} style={styles.type}>
-                      {type}
-                    </Text>
-                  ))}
-                </View>
-              </View>
-            </View>
-          </View>
-        )}
-      </View>
+      <FlatList
+        data={pokemons}
+        renderItem={renderItem}
+        keyExtractor={(item) => item.id.toString()}
+        numColumns={2}
+        columnWrapperStyle={styles.row}
+        onEndReached={() => hasMore && !loading && loadPokemons()}
+        onEndReachedThreshold={0.4}
+        contentContainerStyle={{ padding: 16 }}
+        ListFooterComponent={
+          loading ? <Text style={{ textAlign: "center", margin: 20 }}>Procurando Pokemons...</Text> : null
+        }
+      />
     </SafeAreaView>
   );
 }
@@ -146,13 +283,15 @@ export default function Index() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#ffffffff",
+    backgroundColor: "#fff",
   },
   header: {
     width: "100%",
     height: 200,
     position: "relative",
     overflow: "hidden",
+    shadowColor: "#000",
+    top: -10,
   },
   logo: {
     width: 230,
@@ -175,7 +314,7 @@ const styles = StyleSheet.create({
     right: 140,
     width: 260,
     height: 40,
-    backgroundColor: "#f9f9f9ff",
+    backgroundColor: "#f9f9f9",
     borderRadius: 9,
     justifyContent: "center",
     paddingHorizontal: 10,
@@ -186,49 +325,52 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#000",
   },
-  content: {
-    marginTop: 40,
-    paddingHorizontal: 16,
-  },
   title: {
     position: "absolute",
-    top: 110,
+    top: 140,
     left: 16,
     fontSize: 32,
     fontWeight: "bold",
   },
-  // Estilos do card
+  row: {
+    justifyContent: "space-between",
+  },
   card: {
-    backgroundColor: "#f0f0f0",
+    flex: 1,
     borderRadius: 12,
-    padding: 16,
-    marginTop: 20,
-    elevation: 3,
+    padding: 12,
+    marginVertical: 8,
+    marginHorizontal: 4,
+    elevation: 4,
   },
   name: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: "bold",
-    marginBottom: 8,
+    color: "#fff",
+    marginBottom: 6,
+  },
+  cardBody: {
+    flexDirection: "row",
+    alignItems: "center",
   },
   image: {
-    width: 100,
-    height: 100,
-    marginRight: 16,
+    width: 80,
+    height: 80,
+    marginRight: 10,
   },
   description: {
-    fontSize: 14,
-    color: "#555",
-    marginBottom: 8,
+    fontSize: 9,
+    color: "#fff",
+    marginBottom: 4,
   },
   type: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#333",
-    backgroundColor: "#e0e0e0",
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    marginBottom: 4,
+    fontSize: 10,
+    color: "#fff",
+    backgroundColor: "rgba(255,255,255,0.2)",
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
     alignSelf: "flex-start",
+    marginBottom: 4,
   },
 });
