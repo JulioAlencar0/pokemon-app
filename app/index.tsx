@@ -12,7 +12,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 
 const typeColors: Record<string, string> = {
   normal: "#A8A77A",
@@ -99,7 +98,7 @@ export default function Index() {
   const [openSearch, setOpenSearch] = useState(false); // controla se o input tá aberto
   const [searchText, setSearchText] = useState(""); // texto digitado no input
   const [pokemons, setPokemons] = useState<PokemonData[]>([]); // lista de pokémons que será mostrada
-  const [offset, setOffset] = useState(0); // controle de paginação
+  const [offset, setOffset] = useState(0); // paginação
   const [loading, setLoading] = useState(false); // evita chamadas duplicadas
   const [hasMore, setHasMore] = useState(true); // controla se tem mais pokémons pra carregar
   const animation = useRef(new Animated.Value(0)).current; // animação da barra de pesquisa
@@ -240,13 +239,11 @@ export default function Index() {
     </View>
   );
 
-  // -------------------------------------
   //               RETURN
-  // -------------------------------------
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <View style={styles.header}>
-        <StatusBar backgroundColor="transparent" barStyle="dark-content" />
+        <StatusBar barStyle="dark-content" hidden={false} />
 
         <TouchableOpacity style={styles.searchButton} onPress={toggleSearch}>
           <Ionicons name="search-circle-sharp" size={45} color="#000" />
@@ -292,7 +289,7 @@ export default function Index() {
           ) : null
         }
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -307,7 +304,8 @@ const styles = StyleSheet.create({
     position: "relative",
     overflow: "hidden",
     shadowColor: "#000",
-    top: -10,
+    top: 35,
+    marginBottom: 20,
   },
   logo: {
     width: 230,
